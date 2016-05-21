@@ -76,7 +76,7 @@ void displayEvents(EventQnodePtr currentPtr);
 void calcTasksStat(EventQnodePtr currentPtr);
 
 const int MAXQUEUES = 2;
-const int MAXTASKS = 100;
+const int MAXTASKS = 1000;
 const int MAXBURSTTIME = 70;
 const int IAT = 90;
 const int QTRT = 30;
@@ -103,7 +103,7 @@ void main(){
     printf("Please enter the number of CPUs to simulate: ");
     scanf("%d", &numCpus);
 
-    //allocate isIdle its size
+    //allocate isIdle and runQueue their sizes
     isIdle = malloc(sizeof(int)*numCpus);
     if(isIdle==NULL){
         printf("memory allocation error");
@@ -114,10 +114,10 @@ void main(){
         printf("memory allocation error");
     }
 
-    //initilize isIdle to 1, all cPUs idle
+    //initilize isIdle and runQueue
     for(i=0;i<numCpus;i++){
-        isIdle[i]=1;
 
+        isIdle[i]=1;
         runQueue[i].nr_active=0;
         runQueue[i].activeQ.nr_active=0;
         runQueue[i].expiredQ.nr_active=0;
@@ -130,15 +130,11 @@ void main(){
             runQueue[i].expiredQ.prioList[j].numTask=0;
             runQueue[i].expiredQ.prioList[j].pArrHeadPtr=NULL;
             runQueue[i].expiredQ.prioList[j].pArrTailPtr=NULL;
-
         }
-    }
-
+    }//end for
 
     printf("Please enter the precentage of RT tasks to simulate: ");
     scanf("%d", &ratioRT);
-
-
     printf("Please enter the precentage of NRT tasks to simulate: ");
     scanf("%d", &ratioNRT);
 
@@ -148,26 +144,24 @@ void main(){
 
         printf("Please enter the precentage of RT tasks to simulate: ");
         scanf("%d", &ratioRT);
-
         printf("Please enter the precentage of NRT tasks to simulate: ");
         scanf("%d", &ratioNRT);
-    }
+    }//end while
 
 
     float numRT;
     float numNRT;
 
+    //get number of RT and NRT tasks to be generated
     numRT=(ratioRT/100.0)*MAXTASKS;
     numNRT=(ratioNRT/100.0)*MAXTASKS;
 
-	EventQnodePtr eventsQheadPtr=NULL, eventsQtailPtr=NULL;
-	Task tasks[MAXTASKS];
 
-	int prevAt = 0;
+	EventQnodePtr eventsQheadPtr=NULL, eventsQtailPtr=NULL;
 	Task task;
 	SchedEvent sysevent;
+	int prevAt = 0;
 	int type;
-
 
 	for(i=0;i<MAXTASKS;i++){
 
@@ -175,42 +169,43 @@ void main(){
 		task.at=rand()%IAT+prevAt;
 		prevAt=task.at;
 		task.bt=rand()%MAXBURSTTIME+1;
-		task.ts=0;  //new taskstatus
-
-		type=rand()%2; //either 0 for RT, or 1 for NRT
+		task.ts=0;                      //new taskstatus
+		type=rand()%2;                  //either 0 for RT, or 1 for NRT
 
 		if(type==0 && numRT!=0){
             numRT--;
             task.type=0;
-			task.pr=rand()%(100);//RT prio from 0 to 99
+			task.pr=rand()%(100);          //RT prio from 0 to 99
         }
 		else if(type==0 && numRT==0){
             numNRT--;
             task.type=1;
-			task.pr=rand()%40 + 100; //NRT prio from 100 to 139
+			task.pr=rand()%40 + 100;       //NRT prio from 100 to 139
         }
         else if(type==1 && numNRT!=0){
             numNRT--;
             task.type=1;
-			task.pr=rand()%40 + 100; //NRT prio from 100 to 139
+			task.pr=rand()%40 + 100;       //NRT prio from 100 to 139
         }
         else if(type==1 && numNRT==0){
             numRT--;
             task.type=0;
-			task.pr=rand()%(100);//RT prio from 0 to 99
+			task.pr=rand()%(100);           //RT prio from 0 to 99
         }
-        sysevent.type=0; //arival
+
+        sysevent.type=0;                    //arival
 		sysevent.time=task.at;
 		sysevent.task=task;
 		enqueueevent(&eventsQheadPtr,&eventsQtailPtr,sysevent);
     }
 
+    //start simulation
 	simTime=0;
 	SchedEvent currentEvent;
 
 	printf("\nTime: %d: Simulation is started ...\n",simTime);
 
-    i=0;   //start with fisrt CPU
+    i=0;                                    //start with fisrt CPU and divide tasks iteratively
     int highestPrio;
     int initType;
     PrioArray tempArray;
@@ -244,7 +239,7 @@ void main(){
             else{
                 printf("\nTime: %d: task %d has finished on CPU %d.\n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
             }
-
+            //switch Queues if active queue is empty
 			if(isEmptyActiveQ(runQueue[currentEvent.task.onCpu]) && !isEmptyExpireQ(runQueue[currentEvent.task.onCpu])){
 
 				printf("\nTime: %d:...switching queues on CPU %d...\n",simTime, currentEvent.task.onCpu);
@@ -253,7 +248,7 @@ void main(){
 				runQueue[currentEvent.task.onCpu].activeQ = runQueue[currentEvent.task.onCpu].expiredQ;
 				runQueue[currentEvent.task.onCpu].expiredQ = tempArray;
 			}
-
+            //service next task
 			if( isIdle[currentEvent.task.onCpu] && !isEmptyActiveQ(runQueue[currentEvent.task.onCpu]))
 			{
                 currentEvent = serviceTask(currentEvent.task.onCpu, currentEvent);
@@ -275,7 +270,7 @@ void main(){
             runQueue[i].activeQ.prioList[currentEvent.task.pr].numTask++;
 		}//end Arrival
 
-		if(isIdle[i]==1 && !isEmptyActiveQ(runQueue[i])){
+		if(isIdle[i]==1 && !isEmptyActiveQ(runQueue[i])){      //service tasks
 
 			currentEvent = serviceTask(i, currentEvent);
 			enqueueevent(&eventsQheadPtr,&eventsQtailPtr,currentEvent);
@@ -285,8 +280,7 @@ void main(){
 		if(initType==0){
             i=(i+1)%numCpus;
 		}
-
-	}
+	}//end while
 
 	printf("\nSimulation has finished.\n");
 	/*calcTasksStat(fEQheadPtr);
