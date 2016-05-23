@@ -1,14 +1,17 @@
-            #include <stdlib.h>
+#include <stdlib.h>
 #include <stdio.h>
 
 struct task{
 	int id;
 	int bt;
 	int at;
-	int pr;
-	int ts; //$$ 0 is new status
+	int pr; //  priority
+	int ts;  //$$ 0 is new status
 	int onCpu;
-	int type;//0: real time RT 1: none real time NRT
+	double avgST; // avg sleep time
+	int nsleep;  // track no of times sleep occurs
+	int interactivity;
+	int type; //0: real time RT 1: none real time NRT
 };
 typedef struct task Task;
 typedef Task *TaskPtr;
@@ -60,9 +63,6 @@ struct runQueue{
     PrioArray  expiredQ;      /* pointer to the expiredpriority array */
 };
 typedef struct runQueue RunQueue;
-
-
-
 
 SchedEvent serviceTask(int onCpu, SchedEvent currentEvent);
 void enqueue(QnodePtr *headPtr, QnodePtr *tailPtr,Task task);
@@ -170,8 +170,9 @@ void main(){
 		prevAt=task.at;
 		task.bt=rand()%MAXBURSTTIME+1;
 		task.ts=0;                      //new taskstatus
+		task.nsleep =0;
+		task.avgST = 0;   // assigning avg sleep time
 		type=rand()%2;                  //either 0 for RT, or 1 for NRT
-
 		if(type==0 && numRT!=0){
             numRT--;
             task.type=0;
@@ -317,19 +318,60 @@ SchedEvent serviceTask(int onCpu, SchedEvent currentEvent){
 			printf("\nTime: %d: serving task %d on CPU %d.\n", simTime,newEvent.task.id, onCpu);
 
 			int qt; //quantum time
-			if(newEvent.task.type==0) // RT task
-				qt=QTRT;
-			else
-				qt=QTNRT;
-			int min = newEvent.task.bt-newEvent.task.ts;
-			if(min>qt)
-				min=qt;
+			int dp; //dynamic priority
+			int bonus;
+			if(newEvent.task.pr<120){
+				qt=(140-newEvent.task.pr)*20;
+			}
+			else{
+				qt=(140-newEvent.task.pr)*5;
+			}
+			if(newEvent.task.bt>qt){
+				newEvent.task.nsleep++;
+				newEvent.task.avgST= (double)(simTime-newEvent.time)/newEvent.task.nsleep;
+			}
+
+			// dp=max(100,min(newEvent.task.pr-bonus+5, 139));
+
+			
+
+			printf("printing avg sleep time to check....# %lf \n",newEvent.task.avgST );
 			newEvent.time=simTime+min;
 			newEvent.task.ts+=min;
-
 			return newEvent;
 }
 
+int getBonus(double avgST){
+		if(avgST>=0 && agvST<100){
+		return 0;
+		}
+		else if (avgST>=100 && avgST<200){
+			return 1;
+		}
+		else if (avgST>=200 && avgST<300){
+			return 2;
+		}
+		else if (avgST>=300 && avgST<400){
+			return 3;
+		}
+		else if (avgST>=400 && avgST<500){
+			return 4;
+		}
+		else if (avgST>=500 && avgST<600){
+			return 5;
+		}
+		}else if (avgST>=600 && avgST<700){
+			return 6;
+		}else if (avgST>=700 && avgST<800){
+			return 7;
+		}else if (avgST>=800 && avgST<900){
+			return 8;
+		}else if (avgST>=900 && avgST<1000){
+			return 9;
+		}else {
+			return 10;
+		}
+}
 
 void enqueue(QnodePtr *headPtr, QnodePtr *tailPtr,Task task){
 	QnodePtr newNodePtr = malloc( sizeof( Qnode));
