@@ -1,0 +1,11 @@
+Name: Wafa Waheeda Syed
+Name: Haya Al-Thani
+ID: ww1402824
+
+ID: 200662244
+
+Linux Scheduler Simulator (1000 tasks)
+
+Number of CPUs entered by user to simulate: 5 
+the percentage of RT tasks to simulate: 50 
+the percentage of NRT tasks to simulate: 50 

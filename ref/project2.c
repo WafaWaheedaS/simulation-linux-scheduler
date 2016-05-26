@@ -144,11 +144,11 @@ void main(){
 	int runs = 0;
 	int useChoice = 0;
 
-	char *filename = "D:\\files\\tracedFile.txt";
+	char *filename = "home/wafa/simulation-linux-scheduler/tracedFile.txt";
 	
-	char *NRTvsRT = "D:\\files\\output_NRTvsRT.txt";
-	char *avgWTT = "D:\\files\\output_avgWTT.txt";
-	char *AVQSize = "D:\\files\\output_AVQSize.txt";
+	char *NRTvsRT = "home/wafa/simulation-linux-scheduler/output_NRTvsRT.txt";
+	char *avgWTT = "home/wafa/simulation-linux-scheduler/output_avgWTT.txt";
+	char *AVQSize = "home/wafa/simulation-linux-scheduler/output_AVQSize.txt";
 	
 	fp = fopen(filename, "w");
 	IAT_NRTvsRT = fopen(NRTvsRT, "w");
@@ -159,9 +159,9 @@ void main(){
 	// fprintf(fp_waiting, "#'total_sys_WTime\tAverage Q_WaitingTime\tsys_avrWTRT\tsys_avrWTNRT\n" );
 
 
-	//int errno = 10;
+	int errno = 10;
 	if (fp == NULL) {
-		printf("File not created okay, errno = %d\n", errno);
+		printf("File not created, errno = %d\n", errno);
 	}
 
 	int Tcounter = 1;
@@ -184,7 +184,7 @@ void main(){
 		else if (useChoice == 1){
 			printf("\tEnter the Parametes separated by space in the same order\n\n");
 			printf("\t~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n");
-			printf("No CPU | No Tasks | Max Burst Time | IAT | QTRT | QTNRT | RT % | NRT % \n\n");
+			printf("No CPU | No Tasks | Max Burst Time | IAT | QTRT | QTNRT | RT | NRT \n\n");
 			printf("-----------------------------------------------------------------------\n\n");
 			scanf_s("%d,%d,%d,%d,%d ", &NO_OF_CPU, &MAXTASKS, &MAXBURSTTIME, &IAT, &QTRT, &QTNRT, &RT_NO, &NRT_NO);
 		}
