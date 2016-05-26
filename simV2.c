@@ -552,7 +552,7 @@ SchedEvent serviceTask(int onCpu, SchedEvent currentEvent){
                 newEvent.task.jitter=(double)newEvent.task.totalJitter/newEvent.task.nsleep;
                 newEvent.task.prevRT=currRT;
                 //printf("nsleep %d, total jitter %d, jitter %f, currRT %d, prevRT %d",
-                newEvent.task.nsleep,   newEvent.task.totalJitter,newEvent.task.jitter, currRT, newEvent.task.prevRT );
+               // newEvent.task.nsleep,   newEvent.task.totalJitter,newEvent.task.jitter, currRT, newEvent.task.prevRT );
                 }
             }
             wt[onCpu]+=(simTime-newEvent.task.enteredQueue);
