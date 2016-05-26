@@ -361,7 +361,6 @@ void main(){
             else{
                 if(currentEvent.task.type==0){
                     avgJitter+=currentEvent.task.jitter;
-                   // printf("jitter %d", avgJitter);
                 }
                 printf("\nTime: %d: task %d has finished on CPU %d.\n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
             }
@@ -406,6 +405,7 @@ void main(){
             runQueue[i].activeQ.nr_active++;
             runQueue[i].activeQ.prioList[currentEvent.task.pr].numTask++;
             runQueue[i].activeQ.prevT=simTime;
+
 		}//end Arrival
 
 		if(isIdle[i]==1 && !isEmptyActiveQ(runQueue[i])){      //service tasks
@@ -498,7 +498,6 @@ SchedEvent serviceTask(int onCpu, SchedEvent currentEvent){
 			isIdle[onCpu] = 0;
 			newEvent.type=1; //departure
 			int highestPrio = getHighestPriority(onCpu);
-
             runQueue[onCpu].activeQ.avgQ+=(simTime-runQueue[onCpu].activeQ.prevT)*runQueue[onCpu].activeQ.nr_active;
 
 			newEvent.task=dequeue(&runQueue[onCpu].activeQ.prioList[highestPrio].pArrHeadPtr,
@@ -552,7 +551,7 @@ SchedEvent serviceTask(int onCpu, SchedEvent currentEvent){
                 newEvent.task.totalJitter+=abs(currRT-newEvent.task.prevRT);
                 newEvent.task.jitter=(double)newEvent.task.totalJitter/newEvent.task.nsleep;
                 newEvent.task.prevRT=currRT;
-                printf("nsleep %d, total jitter %d, jitter %f, currRT %d, prevRT %d",
+                //printf("nsleep %d, total jitter %d, jitter %f, currRT %d, prevRT %d",
                 newEvent.task.nsleep,   newEvent.task.totalJitter,newEvent.task.jitter, currRT, newEvent.task.prevRT );
                 }
             }
