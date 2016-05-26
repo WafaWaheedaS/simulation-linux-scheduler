@@ -116,16 +116,12 @@ void main(){
     int ratioNRT;
     int i,j;
 
+    //initialize random number generator
     const gsl_rng_type * T;
     gsl_rng * r;
 
     // select random number generator
     r = gsl_rng_alloc (gsl_rng_mt19937);
-
-    double x = gsl_ran_gaussian(r, 10);
-
-
-    printf("testing random number: %f\n",x);
 
     //get inputs from user
     printf("Linux Scheduler Simulator (1000 tasks)\n");
@@ -257,14 +253,15 @@ void main(){
     int allmaxBT=0;
     int allminIAT=0;
     int allmaxIAT=0;
+    int rnd; //random number based on the Uniform Distribution
 
 	for(i=0;i<MAXTASKS;i++){
 
 		task.id=i;
-		task.at=rand()%IAT+prevAt;
-
+		task.at=gsl_rng_uniform(r)*IAT+prevAt;
 		prevAt=task.at;
-		task.bt=rand()%MAXBURSTTIME+MINBURSTTIME;
+		task.bt=gsl_rng_uniform(r)*MAXBURSTTIME+MINBURSTTIME;
+		printf("AT is %d and BT is %d\n", task.at, task.bt);
 		task.status=0;
 		task.totalST=0;                    //new taskstatus
 		task.nsleep =0;
@@ -284,8 +281,7 @@ void main(){
         allminIAT=min(allminIAT, task.at);
         allmaxIAT=max(allmaxIAT, task.at);
 
-
-		type=rand()%2;                  //either 0 for RT, or 1 for NRT
+		type=gsl_rng_uniform(r)*2;                  //either 0 for RT, or 1 for NRT
 		if(type==0 && numRT!=0){
             numRT--;
             task.type=0;
@@ -324,9 +320,10 @@ void main(){
     int highestPrio;
     int initType;
     PrioArray tempArray;
-    int doLB=1;     //1: preform load balancing, 0: don't do load balancing
+    int doLB=0;     //1: preform load balancing, 0: don't do load balancing
     int balanceEvery = 100; //preform load balancing after every 50 tasks
     int k=0;
+    int maxQ=0;
 
 	while(!isEmptyEQ(eventsQheadPtr)){
 
@@ -416,6 +413,9 @@ void main(){
 			enqueueevent(&eventsQheadPtr,&eventsQtailPtr,currentEvent);
 		}//end Service
 
+        if(runQueue[i].activeQ.nr_active>maxQ){
+            maxQ=runQueue[i].activeQ.nr_active;
+        }
         if(previdletime[i]>=0){
 		 	idletime[i]+=simTime-previdletime[i];
 		  	previdletime[i]=-1;
@@ -430,6 +430,7 @@ void main(){
 		if(doLB ==1 && k%balanceEvery==0){
             loadBalancing();
 		}
+
 	}//end while
 
 	printf("\nSimulation has finished.\n");
@@ -485,6 +486,7 @@ void main(){
     printf("\tMinimum IAT = %d\n", allminIAT);
     printf("\tMaximum IAT = %d\n", allmaxIAT);
     printf("\tAverage Queue Length = %f\n", avgQL/numCpus);
+    printf("\tMaximum Queue Length = %d\n", maxQ);
     numRT=(ratioRT/100.0)*MAXTASKS;
     printf("\tJitter for Real Time Tasks = %f\n", (double)avgJitter/numRT);
 }//end main
@@ -845,34 +847,6 @@ void displayEvents(EventQnodePtr currentPtr){
 	}
 }
 
-
-/*
-void calcTasksStat(EventQnodePtr currentPtr){
-	if(currentPtr==NULL)
-		return;
-	else{
-		SchedEvent tempevent;
-		while(currentPtr!=NULL){
-			fTasks++;
-			wt+=(currentPtr->data).time-
-			    ((currentPtr->data).task.at+(currentPtr->data).task.bt);
-			if((currentPtr->data).task.type==0){
-				wtRT+=(currentPtr->data).time-
-			    	((currentPtr->data).task.at+(currentPtr->data).task.bt);
-				fTasksRT++;
-			}
-			else{
-				wtNRT+=(currentPtr->data).time-
-			    	((currentPtr->data).task.at+(currentPtr->data).task.bt);
-				fTasksNRT++;
-			}
-			currentPtr=currentPtr->nextPtr;
-		}
-		avrWT=(double)wt/fTasks;
-		avrWTRT=(double)wtRT/fTasksRT;
-		avrWTNRT=(double)wtNRT/fTasksNRT;
-	}
-}*/
 
 
 
