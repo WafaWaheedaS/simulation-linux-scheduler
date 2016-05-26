@@ -1,5 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
 
 struct task{
 	int id;
@@ -12,7 +14,9 @@ struct task{
 	double avgST; // avg sleep time
 	int totalST; //total sleep time
 	int nsleep;  // track no of times sleep occurs
-	//int interactivity;
+	int prevRT;    //for RT tasks keeps track of Response time
+	int totalJitter;
+	double jitter;  //for RT tasks
 	int type; //0: real time RT 1: none real time NRT
 };
 typedef struct task Task;
@@ -93,7 +97,7 @@ const int QTNRT = 10;
 int wt=0,wtRT=0,wtNRT=0;
 int fTasks=0, fTasksRT=0, fTasksNRT=0;*/
 int simTime;
-
+int numCpus;
 int *isIdle;
 RunQueue *runQueue;
 int *wt; //cpu wait time
@@ -101,20 +105,33 @@ int *idletime;
 int *previdletime;
 int *taskPerCpu;
 int *allbtPerCPU;
+int *allatPerCPU;
+
 int *rt; //response time
-int *avgQL;
-int *preSimT;
+//int *avgQL;
+//int *preSimT;
 int *minBT;
 int *maxBT;
+int *minIAT;
+int *maxIAT;
+int avgJitter=0;
 
 void main(){
 
-    int numCpus;
+
     int ratioRT;
     int ratioNRT;
     int i,j;
 
+    const gsl_rng_type * T;
+    gsl_rng * r;
 
+    // select random number generator
+    r = gsl_rng_alloc (gsl_rng_mt19937);
+
+    double x = gsl_ran_gaussian(r, 10);
+
+    printf("testing random number: %f\n",x);
     printf("Linux Scheduler Simulator (1000 tasks)\n");
 
     printf("Please enter the number of CPUs to simulate: ");
@@ -154,18 +171,31 @@ void main(){
     if(allbtPerCPU==NULL){
         printf("memory allocation error");
     }
+    allatPerCPU = malloc(sizeof(int)*numCpus);
+    if(allatPerCPU==NULL){
+        printf("memory allocation error");
+    }
     rt = malloc(sizeof(int)*numCpus);
     if(rt==NULL){
         printf("memory allocation error");
     }
-    avgQL = malloc(sizeof(int)*numCpus);
-    if(avgQL==NULL){
+    minBT = malloc(sizeof(int)*numCpus);
+    if(minBT==NULL){
         printf("memory allocation error");
     }
-    preSimT = malloc(sizeof(int)*numCpus);
-    if(preSimT==NULL){
+    maxBT = malloc(sizeof(int)*numCpus);
+    if(maxBT==NULL){
         printf("memory allocation error");
     }
+    minIAT = malloc(sizeof(int)*numCpus);
+    if(minIAT==NULL){
+        printf("memory allocation error");
+    }
+    maxIAT = malloc(sizeof(int)*numCpus);
+    if(maxIAT==NULL){
+        printf("memory allocation error");
+    }
+
     //initilize isIdle and runQueue
     for(i=0;i<numCpus;i++){
 
@@ -193,9 +223,10 @@ void main(){
         previdletime[i]=0;
         taskPerCpu[i]=0;
         allbtPerCPU[i]=0;
+        allatPerCPU[i]=0;
         rt[i]=0;
-        avgQL[i]=0;
-        preSimT[i]=0;
+        //avgQL[i]=0;
+        //preSimT[i]=0;
     }//end for
 
     printf("Please enter the precentage of RT tasks to simulate: ");
@@ -229,13 +260,17 @@ void main(){
 	int type;
 	int allIAT=0; //initial arrival time
 	int allbt=0; //total burst time
-
+    int allminBT=0;
+    int allmaxBT=0;
+    int allminIAT=0;
+    int allmaxIAT=0;
 //printf("2test\n");
 
 	for(i=0;i<MAXTASKS;i++){
 
 		task.id=i;
 		task.at=rand()%IAT+prevAt;
+
 		prevAt=task.at;
 		task.bt=rand()%MAXBURSTTIME+MINBURSTTIME;
 		task.status=0;
@@ -244,6 +279,20 @@ void main(){
 		task.avgST = 0;   // assigning avg sleep time
         allbt+=task.bt; //&&
         allIAT+=task.at;
+        task.prevRT=0;
+        task.jitter=0;
+        if(i==0){
+            allminBT=task.bt;
+            allmaxBT=task.bt;
+            allminIAT=task.at;
+            allmaxIAT=task.at;
+        }
+        allminBT=min(allminBT, task.bt);
+        allmaxBT=max(allmaxBT, task.bt);
+        allminIAT=min(allminIAT, task.at);
+        allmaxIAT=max(allmaxIAT, task.at);
+
+
 		type=rand()%2;                  //either 0 for RT, or 1 for NRT
 		if(type==0 && numRT!=0){
             numRT--;
@@ -285,11 +334,14 @@ void main(){
     int initType;
     PrioArray tempArray;
     //int prevT;
-    int k=0;
+    //int k=0;
 
-	while(!isEmptyEQ(eventsQheadPtr) && k<50 ){
-
+	while(!isEmptyEQ(eventsQheadPtr)){
         //prevT=simTime;
+
+        //printf("simTime %d, prevT %d\n", simTime, runQueue[i].activeQ.prevT);
+
+		//printf("Q length %d, avgQL %d\n", runQueue[i].activeQ.nr_active, runQueue[i].activeQ.avgQ);
 
 		currentEvent = dequeueevent(&eventsQheadPtr,&eventsQtailPtr);
 		simTime=currentEvent.time;
@@ -307,7 +359,7 @@ void main(){
 
 				printf("\nTime: %d: enqueu task %d in expired Q of CPU %d.\n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
 
-				if(currentEvent.task.type==0){
+				if(currentEvent.task.type==1){
                     bonus=getBonus(currentEvent.task.avgST);
                     dp=max(100,min(currentEvent.task.pr-bonus+5, 139));
                     currentEvent.task.pr=dp;
@@ -324,6 +376,10 @@ void main(){
 
             }
             else{
+                if(currentEvent.task.type==0){
+                    avgJitter+=currentEvent.task.jitter;
+                    printf("jitter %d", avgJitter);
+                }
                 printf("\nTime: %d: task %d has finished on CPU %d.\n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
             }
             //switch Queues if active queue is empty
@@ -334,12 +390,13 @@ void main(){
                 tempArray = runQueue[currentEvent.task.onCpu].activeQ;
 				runQueue[currentEvent.task.onCpu].activeQ = runQueue[currentEvent.task.onCpu].expiredQ;
 				runQueue[currentEvent.task.onCpu].expiredQ = tempArray;
-                preSimT[i]=simTime;
+                //preSimT[i]=simTime;
 
 			}
             //service next task
 			if( isIdle[currentEvent.task.onCpu] && !isEmptyActiveQ(runQueue[currentEvent.task.onCpu]))
 			{
+
                 currentEvent = serviceTask(currentEvent.task.onCpu, currentEvent);
                 enqueueevent(&eventsQheadPtr,&eventsQtailPtr,currentEvent);
 			}
@@ -348,13 +405,20 @@ void main(){
         if(currentEvent.type==0){   //arrival
 
 			printf("\nTime: %d: enqueu task id %d in active Q of CPU %d.\n", simTime, currentEvent.task.id, i);
+            if(taskPerCpu[i]==0){
+                minBT[i]=currentEvent.task.bt;
+                maxBT[i]=currentEvent.task.bt;
+                minIAT[i]=currentEvent.task.at;
+                maxIAT[i]=currentEvent.task.at;
+            }
 
             taskPerCpu[i]++;
             allbtPerCPU[i]+=currentEvent.task.bt;
+            allatPerCPU[i]+=currentEvent.task.at;
 			currentEvent.task.onCpu=i;
             currentEvent.task.enteredQueue=simTime;
 
-            preSimT[i]=simTime;
+            //preSimT[i]=simTime;
 
 			enqueue(&runQueue[i].activeQ.prioList[currentEvent.task.pr].pArrHeadPtr,
                     &runQueue[i].activeQ.prioList[currentEvent.task.pr].pArrTailPtr, currentEvent.task);
@@ -385,42 +449,72 @@ void main(){
             i=(i+1)%numCpus;
 		}
 
-		printf("Q length %d, avgQL %d", runQueue[i].activeQ.nr_active, runQueue[i].activeQ.avgQ);
-		k++;
+        //printf("simTime %d, prevT %d\n", simTime, runQueue[i].activeQ.prevT);
+
+		//printf("Q length %d, avgQL %d\n", runQueue[i].activeQ.nr_active, runQueue[i].activeQ.avgQ);
+		//k++;
 	}//end while
 
 	printf("\nSimulation has finished.\n");
 
-    int sumWT=0;
-    int sumIdleTime=0;
+    double avgWT=0;
+    double avgRT=0;
+    double avgCPU=0;
+    double avgTP=0;
+    double avgTT=0;
+    double avgBT=0;
+    double avgIAT=0;
+    double avgQL=0;
+
 
     printf("\nSimulation statistics per CPU:\n");
 
 	for(i=0;i<numCpus;i++){
-        sumWT+=wt[i];
-        sumIdleTime+=idletime[i];
+       // sumWT+=wt[i];
+       // sumIdleTime+=idletime[i];
        // printf("%d\n",taskPerCpu[i]);
         printf("CPU %d:\n",i);
+        printf("\tNumber of Tasks served = %d\n", taskPerCpu[i]);
         printf("\tAverage Delay Time = %f\n", (double)wt[i]/taskPerCpu[i]);
         printf("\tAverage Response Time = %f\n", (double)rt[i]/taskPerCpu[i]);
         printf("\tCPU Utilization = %f\n", (double)((simTime-starttime)-idletime[i])/ (simTime-starttime));
+        printf("\tThroughput per ms = %f\n", (double)MAXTASKS/simTime);
         printf("\tAverage Turnaround Time = %f\n", (double)(allbtPerCPU[i]+wt[i])/taskPerCpu[i]);
         printf("\tAverage Burst Time = %f\n", (double)allbtPerCPU[i]/taskPerCpu[i]);
+        printf("\tMinimum Burst Time = %d\n", minBT[i]);
+        printf("\tMaximum Burst Time = %d\n", maxBT[i]);
+        printf("\tAverage IAT = %f\n", (double)allatPerCPU[i]/taskPerCpu[i]);
+        printf("\tMinimum IAT = %d\n", minIAT[i]);
+        printf("\tMaximum IAT = %d\n", maxIAT[i]);
         printf("\tAverage Queue Length = %f\n", (double)runQueue[i].activeQ.avgQ/simTime);
+
+        avgWT+=(double)wt[i]/taskPerCpu[i];
+        avgRT+=(double)rt[i]/taskPerCpu[i];
+        avgCPU+=(double)((simTime-starttime)-idletime[i])/ (simTime-starttime);
+        avgTP+=(double)MAXTASKS/simTime;
+        avgTT=(double)(allbtPerCPU[i]+wt[i])/taskPerCpu[i];
+        avgBT+=(double)allbtPerCPU[i]/taskPerCpu[i];
+        avgIAT+=(double)allatPerCPU[i]/taskPerCpu[i];
+        avgQL+=(double)runQueue[i].activeQ.avgQ/simTime;
 
 	}
 
-	printf("\nOverall Simulation statistics:\n");
-	printf("\tAverage wating time for all CPUs = %f\n",(double)sumWT/numCpus);
-    printf("\tAverage idle time for all CPUs = %f\n",(double)sumIdleTime/numCpus);
-
-	/*calcTasksStat(fEQheadPtr);
-	printf("\nResults:\n");
-	printf("Total tasks served = %d, where %d are RT and %d are NRT tasks.\n", 			fTasks,fTasksRT,fTasksNRT);
-	printf("Average wating time for all processes = %f\n",avrWT);
-	printf("Average wating time for RT processes = %f\n",avrWTRT);
-	printf("Average wating time for NRT processes = %f\n",avrWTNRT);*/
-
+	printf("\nOverall Simulation Statistics (all CPUs):\n");
+	printf("\tMaximum Tasks in the system = %d\n", MAXTASKS);
+    printf("\tAverage Delay Time = %f\n", avgWT/numCpus);
+    printf("\tAverage Response Time = %f\n", avgRT/numCpus);
+    printf("\tAverage CPU Utilization = %f\n", avgCPU/numCpus);
+    printf("\tAverage Throughput per ms = %f\n", avgTP/numCpus);
+    printf("\tAverage Turnaround Time = %f\n", avgTT/numCpus);
+    printf("\tAverage Burst Time = %f\n", avgBT/numCpus);
+    printf("\tMinimum Burst Time = %d\n", allminBT);
+    printf("\tMaximum Burst Time = %d\n", allmaxBT);
+    printf("\tAverage IAT = %f\n", avgIAT/numCpus);
+    printf("\tMinimum IAT = %d\n", allminIAT);
+    printf("\tMaximum IAT = %d\n", allmaxIAT);
+    printf("\tAverage Queue Length = %f\n", avgQL/numCpus);
+    numRT=(ratioRT/100.0)*MAXTASKS;
+    printf("\tJitter for Real Time Tasks = %f\n", (double)avgJitter/numRT);
 }
 
 SchedEvent serviceTask(int onCpu, SchedEvent currentEvent){
@@ -430,19 +524,16 @@ SchedEvent serviceTask(int onCpu, SchedEvent currentEvent){
 			isIdle[onCpu] = 0;
 			newEvent.type=1; //departure
 
-            if(newEvent.task.status==0){
-                rt[onCpu]+=simTime-newEvent.task.at;
-                newEvent.task.status=1;// not new
-            }
-
 			int highestPrio = getHighestPriority(onCpu);
 
-            avgQL[onCpu]+=(simTime-preSimT[onCpu])*runQueue[onCpu].activeQ.nr_active;
+            //avgQL[onCpu]+=(simTime-preSimT[onCpu])*runQueue[onCpu].activeQ.nr_active;
 
             runQueue[onCpu].activeQ.avgQ+=(simTime-runQueue[onCpu].activeQ.prevT)*runQueue[onCpu].activeQ.nr_active;
 
 			newEvent.task=dequeue(&runQueue[onCpu].activeQ.prioList[highestPrio].pArrHeadPtr,
                                   &runQueue[onCpu].activeQ.prioList[highestPrio].pArrTailPtr);
+
+            runQueue[onCpu].activeQ.prevT=simTime;
             runQueue[onCpu].activeQ.nr_active--;
             runQueue[onCpu].activeQ.prioList[highestPrio].numTask--;
 
@@ -471,6 +562,29 @@ SchedEvent serviceTask(int onCpu, SchedEvent currentEvent){
                 newEvent.time=simTime+qt;
 			}
 
+            int currRT; //current response time
+
+            if(newEvent.task.status==0){
+                rt[onCpu]+=simTime-newEvent.task.at;
+                minBT[onCpu]=min(minBT[onCpu], newEvent.task.bt);
+                maxBT[onCpu]=max(maxBT[onCpu], newEvent.task.bt);
+                minIAT[onCpu]=min(minIAT[onCpu], newEvent.task.at);
+                maxIAT[onCpu]=max(maxIAT[onCpu], newEvent.task.at);
+                if(newEvent.task.type==0){ //RT task
+                   newEvent.task.prevRT=simTime-newEvent.task.enteredQueue;
+                }
+                newEvent.task.status=1;// not new
+            }
+            else{
+                if(newEvent.task.type==0){ //RT task
+                currRT=simTime-newEvent.task.enteredQueue;
+                newEvent.task.totalJitter+=abs(currRT-newEvent.task.prevRT);
+                newEvent.task.jitter=(double)newEvent.task.totalJitter/newEvent.task.nsleep;
+                newEvent.task.prevRT=currRT;
+                printf("nsleep %d, total jitter %d, jitter %f, currRT %d, prevRT %d",
+                newEvent.task.nsleep,   newEvent.task.totalJitter,newEvent.task.jitter, currRT, newEvent.task.prevRT );
+                }
+            }
             wt[onCpu]+=(simTime-newEvent.task.enteredQueue);
 
            // printf("total sleep %d, n sleep %d, task pr %d, avg sleep time: %lf\n"
@@ -480,6 +594,45 @@ SchedEvent serviceTask(int onCpu, SchedEvent currentEvent){
 			return newEvent;
 }
 
+int loadBalancing(){
+
+    int busy = findBusiestQueue();
+    int i = checkRatio(busy);
+    int prio;
+
+    while (i != -1){
+        prio = getHighestPriorityEA(busy);
+        pullTask(busy, i);
+
+    }
+
+}
+void pullTask(){
+
+}
+int checkRatio(int busy){
+    int i=0;
+    double ratio;
+    //if the busy Q has 25% more processs than the other task preform load balancing
+    for(i=0;i<numCpus;i++){
+        ratio=(double) (runQueue[busy].nr_active-runQueue[i].nr_active)/runQueue[busy].nr_active;
+        if( ratio >= 0.25 ){
+            return i;
+        }
+    }
+    return -1;
+}
+int findBusiestQueue(){
+    int max=0;
+    int i=0;
+
+    for(i=0;i<numCpus;i++){
+        if(runQueue[i].nr_active>runQueue[max].nr_active){
+            max=i;
+        }
+    }
+    return max;
+}
 int max(int a , int b){
     if(a>b)
         return a;
@@ -564,6 +717,21 @@ int getHighestPriority(int onCpu){
 
     for(i=0;i<140;i++){
         if(runQueue[onCpu].activeQ.prioList[i].numTask!=0){
+            prio=i;
+            break;
+        }
+    }
+    return prio;
+
+}
+
+int getHighestPriorityEA(int onCpu){
+
+    int i;
+    int prio=-1;
+
+    for(i=0;i<140;i++){
+        if(runQueue[onCpu].expiredQ.prioList[i].numTask!=0){
             prio=i;
             break;
         }
@@ -674,6 +842,8 @@ void displayEvents(EventQnodePtr currentPtr){
 		}
 	}
 }
+
+
 /*
 void calcTasksStat(EventQnodePtr currentPtr){
 	if(currentPtr==NULL)
