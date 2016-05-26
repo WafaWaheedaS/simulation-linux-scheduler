@@ -6,11 +6,13 @@ struct task{
 	int bt;
 	int at;
 	int pr; //  priority
-	int ts;  //$$ 0 is new status
+	int status;  //$$ 0 is new status
+	int enteredQueue;
 	int onCpu;
 	double avgST; // avg sleep time
+	int totalST; //total sleep time
 	int nsleep;  // track no of times sleep occurs
-	int interactivity;
+	//int interactivity;
 	int type; //0: real time RT 1: none real time NRT
 };
 typedef struct task Task;
@@ -52,6 +54,8 @@ typedef struct prioLinkList PrioLinkList;
 
 struct prioArray{
     int nr_active;      /* number of tasks */
+    int prevT;
+    int avgQ;
 //    int type; //type=0 activeQ, type=1 expiaryQ
     PrioLinkList prioList[140];
 };
@@ -74,21 +78,34 @@ int isEmpty(QnodePtr headPtr);
 int isEmptyEQ(EventQnodePtr headPtr);
 void displayEvents(EventQnodePtr currentPtr);
 void calcTasksStat(EventQnodePtr currentPtr);
+int max(int a , int b);
+int min(int a , int b);
 
 const int MAXQUEUES = 2;
 const int MAXTASKS = 1000;
-const int MAXBURSTTIME = 70;
+const int MINBURSTTIME = 100;
+const int MAXBURSTTIME = 1000;
 const int IAT = 90;
 const int QTRT = 30;
 const int QTNRT = 10;
 
-double avrWT=0, avrWTRT=0, avrWTNRT=0;
+/*double avrWT=0, avrWTRT=0, avrWTNRT=0;
 int wt=0,wtRT=0,wtNRT=0;
-int fTasks=0, fTasksRT=0, fTasksNRT=0;
+int fTasks=0, fTasksRT=0, fTasksNRT=0;*/
 int simTime;
 
 int *isIdle;
 RunQueue *runQueue;
+int *wt; //cpu wait time
+int *idletime;
+int *previdletime;
+int *taskPerCpu;
+int *allbtPerCPU;
+int *rt; //response time
+int *avgQL;
+int *preSimT;
+int *minBT;
+int *maxBT;
 
 void main(){
 
@@ -114,6 +131,41 @@ void main(){
         printf("memory allocation error");
     }
 
+    wt = malloc(sizeof(int)*numCpus);
+    if(wt==NULL){
+        printf("memory allocation error");
+    }
+
+    idletime = malloc(sizeof(int)*numCpus);
+    if(idletime==NULL){
+        printf("memory allocation error");
+    }
+
+    previdletime = malloc(sizeof(int)*numCpus);
+    if(previdletime==NULL){
+        printf("memory allocation error");
+    }
+
+    taskPerCpu = malloc(sizeof(int)*numCpus);
+    if(taskPerCpu==NULL){
+        printf("memory allocation error");
+    }
+    allbtPerCPU = malloc(sizeof(int)*numCpus);
+    if(allbtPerCPU==NULL){
+        printf("memory allocation error");
+    }
+    rt = malloc(sizeof(int)*numCpus);
+    if(rt==NULL){
+        printf("memory allocation error");
+    }
+    avgQL = malloc(sizeof(int)*numCpus);
+    if(avgQL==NULL){
+        printf("memory allocation error");
+    }
+    preSimT = malloc(sizeof(int)*numCpus);
+    if(preSimT==NULL){
+        printf("memory allocation error");
+    }
     //initilize isIdle and runQueue
     for(i=0;i<numCpus;i++){
 
@@ -121,6 +173,11 @@ void main(){
         runQueue[i].nr_active=0;
         runQueue[i].activeQ.nr_active=0;
         runQueue[i].expiredQ.nr_active=0;
+
+        runQueue[i].activeQ.avgQ=0;
+        runQueue[i].activeQ.prevT=0;
+        runQueue[i].expiredQ.avgQ=0;
+        runQueue[i].expiredQ.prevT=0;
 
         for(j=0;j<140;j++){
             runQueue[i].activeQ.prioList[j].numTask=0;
@@ -131,6 +188,14 @@ void main(){
             runQueue[i].expiredQ.prioList[j].pArrHeadPtr=NULL;
             runQueue[i].expiredQ.prioList[j].pArrTailPtr=NULL;
         }
+        wt[i]=0;
+        idletime[i]=0;
+        previdletime[i]=0;
+        taskPerCpu[i]=0;
+        allbtPerCPU[i]=0;
+        rt[i]=0;
+        avgQL[i]=0;
+        preSimT[i]=0;
     }//end for
 
     printf("Please enter the precentage of RT tasks to simulate: ");
@@ -155,23 +220,30 @@ void main(){
     //get number of RT and NRT tasks to be generated
     numRT=(ratioRT/100.0)*MAXTASKS;
     numNRT=(ratioNRT/100.0)*MAXTASKS;
-
+//printf("1test\n");
 
 	EventQnodePtr eventsQheadPtr=NULL, eventsQtailPtr=NULL;
 	Task task;
 	SchedEvent sysevent;
 	int prevAt = 0;
 	int type;
+	int allIAT=0; //initial arrival time
+	int allbt=0; //total burst time
+
+//printf("2test\n");
 
 	for(i=0;i<MAXTASKS;i++){
 
 		task.id=i;
 		task.at=rand()%IAT+prevAt;
 		prevAt=task.at;
-		task.bt=rand()%MAXBURSTTIME+1;
-		task.ts=0;                      //new taskstatus
+		task.bt=rand()%MAXBURSTTIME+MINBURSTTIME;
+		task.status=0;
+		task.totalST=0;                    //new taskstatus
 		task.nsleep =0;
 		task.avgST = 0;   // assigning avg sleep time
+        allbt+=task.bt; //&&
+        allIAT+=task.at;
 		type=rand()%2;                  //either 0 for RT, or 1 for NRT
 		if(type==0 && numRT!=0){
             numRT--;
@@ -199,9 +271,11 @@ void main(){
 		sysevent.task=task;
 		enqueueevent(&eventsQheadPtr,&eventsQtailPtr,sysevent);
     }
+//printf("3test\n");
 
     //start simulation
 	simTime=0;
+	int starttime=(*eventsQheadPtr).data.time;
 	SchedEvent currentEvent;
 
 	printf("\nTime: %d: Simulation is started ...\n",simTime);
@@ -210,31 +284,43 @@ void main(){
     int highestPrio;
     int initType;
     PrioArray tempArray;
+    //int prevT;
+    int k=0;
 
-	while(!isEmptyEQ(eventsQheadPtr)){
+	while(!isEmptyEQ(eventsQheadPtr) && k<50 ){
+
+        //prevT=simTime;
 
 		currentEvent = dequeueevent(&eventsQheadPtr,&eventsQtailPtr);
-
 		simTime=currentEvent.time;
+
+
         initType=currentEvent.type;
 
 		if(currentEvent.type==1){   //Departure
 
 			isIdle[currentEvent.task.onCpu]=1;
 
-			if(currentEvent.task.ts < currentEvent.task.bt){
+			if(currentEvent.task.bt != 0){
+                int bonus;
+                int dp; //dynamic prio
 
 				printf("\nTime: %d: enqueu task %d in expired Q of CPU %d.\n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
 
-				if(currentEvent.task.type==0)//NRT
-					currentEvent.task.pr+=5;
+				if(currentEvent.task.type==0){
+                    bonus=getBonus(currentEvent.task.avgST);
+                    dp=max(100,min(currentEvent.task.pr-bonus+5, 139));
+                    currentEvent.task.pr=dp;
+				}//NRT
 
+                currentEvent.task.enteredQueue=simTime;
                 enqueue(&runQueue[currentEvent.task.onCpu].expiredQ.prioList[currentEvent.task.pr].pArrHeadPtr,
                         &runQueue[currentEvent.task.onCpu].expiredQ.prioList[currentEvent.task.pr].pArrTailPtr, currentEvent.task);
 
                 runQueue[currentEvent.task.onCpu].nr_active++;
                 runQueue[currentEvent.task.onCpu].expiredQ.nr_active++;
                 runQueue[currentEvent.task.onCpu].expiredQ.prioList[currentEvent.task.pr].numTask++;
+                runQueue[currentEvent.task.onCpu].expiredQ.prevT=simTime;
 
             }
             else{
@@ -248,6 +334,8 @@ void main(){
                 tempArray = runQueue[currentEvent.task.onCpu].activeQ;
 				runQueue[currentEvent.task.onCpu].activeQ = runQueue[currentEvent.task.onCpu].expiredQ;
 				runQueue[currentEvent.task.onCpu].expiredQ = tempArray;
+                preSimT[i]=simTime;
+
 			}
             //service next task
 			if( isIdle[currentEvent.task.onCpu] && !isEmptyActiveQ(runQueue[currentEvent.task.onCpu]))
@@ -261,7 +349,12 @@ void main(){
 
 			printf("\nTime: %d: enqueu task id %d in active Q of CPU %d.\n", simTime, currentEvent.task.id, i);
 
+            taskPerCpu[i]++;
+            allbtPerCPU[i]+=currentEvent.task.bt;
 			currentEvent.task.onCpu=i;
+            currentEvent.task.enteredQueue=simTime;
+
+            preSimT[i]=simTime;
 
 			enqueue(&runQueue[i].activeQ.prioList[currentEvent.task.pr].pArrHeadPtr,
                     &runQueue[i].activeQ.prioList[currentEvent.task.pr].pArrTailPtr, currentEvent.task);
@@ -269,6 +362,9 @@ void main(){
             runQueue[i].nr_active++;
             runQueue[i].activeQ.nr_active++;
             runQueue[i].activeQ.prioList[currentEvent.task.pr].numTask++;
+            runQueue[i].activeQ.prevT=simTime;
+
+            //avgQL[i]+=(runQueue[i].activeQ.nr_active++);
 		}//end Arrival
 
 		if(isIdle[i]==1 && !isEmptyActiveQ(runQueue[i])){      //service tasks
@@ -277,13 +373,47 @@ void main(){
 			enqueueevent(&eventsQheadPtr,&eventsQtailPtr,currentEvent);
 		}//end Service
 
+        if(previdletime[i]>=0){
+		 	idletime[i]+=simTime-previdletime[i];
+		  	previdletime[i]=-1;
+		 }
+
+        if(isIdle[i]==1)
+			previdletime[i]=simTime;
 		//increment Cpu counter only after processing arrivals
 		if(initType==0){
             i=(i+1)%numCpus;
 		}
+
+		printf("Q length %d, avgQL %d", runQueue[i].activeQ.nr_active, runQueue[i].activeQ.avgQ);
+		k++;
 	}//end while
 
 	printf("\nSimulation has finished.\n");
+
+    int sumWT=0;
+    int sumIdleTime=0;
+
+    printf("\nSimulation statistics per CPU:\n");
+
+	for(i=0;i<numCpus;i++){
+        sumWT+=wt[i];
+        sumIdleTime+=idletime[i];
+       // printf("%d\n",taskPerCpu[i]);
+        printf("CPU %d:\n",i);
+        printf("\tAverage Delay Time = %f\n", (double)wt[i]/taskPerCpu[i]);
+        printf("\tAverage Response Time = %f\n", (double)rt[i]/taskPerCpu[i]);
+        printf("\tCPU Utilization = %f\n", (double)((simTime-starttime)-idletime[i])/ (simTime-starttime));
+        printf("\tAverage Turnaround Time = %f\n", (double)(allbtPerCPU[i]+wt[i])/taskPerCpu[i]);
+        printf("\tAverage Burst Time = %f\n", (double)allbtPerCPU[i]/taskPerCpu[i]);
+        printf("\tAverage Queue Length = %f\n", (double)runQueue[i].activeQ.avgQ/simTime);
+
+	}
+
+	printf("\nOverall Simulation statistics:\n");
+	printf("\tAverage wating time for all CPUs = %f\n",(double)sumWT/numCpus);
+    printf("\tAverage idle time for all CPUs = %f\n",(double)sumIdleTime/numCpus);
+
 	/*calcTasksStat(fEQheadPtr);
 	printf("\nResults:\n");
 	printf("Total tasks served = %d, where %d are RT and %d are NRT tasks.\n", 			fTasks,fTasksRT,fTasksNRT);
@@ -295,55 +425,80 @@ void main(){
 
 SchedEvent serviceTask(int onCpu, SchedEvent currentEvent){
 
-          //  printf("enter service");
 			SchedEvent newEvent;
-
             newEvent = currentEvent;
-
 			isIdle[onCpu] = 0;
-
 			newEvent.type=1; //departure
 
-           // printf("getting high prio");
+            if(newEvent.task.status==0){
+                rt[onCpu]+=simTime-newEvent.task.at;
+                newEvent.task.status=1;// not new
+            }
+
 			int highestPrio = getHighestPriority(onCpu);
 
-           // printf("dequeue task");
+            avgQL[onCpu]+=(simTime-preSimT[onCpu])*runQueue[onCpu].activeQ.nr_active;
+
+            runQueue[onCpu].activeQ.avgQ+=(simTime-runQueue[onCpu].activeQ.prevT)*runQueue[onCpu].activeQ.nr_active;
+
 			newEvent.task=dequeue(&runQueue[onCpu].activeQ.prioList[highestPrio].pArrHeadPtr,
                                   &runQueue[onCpu].activeQ.prioList[highestPrio].pArrTailPtr);
-
-//printf("decre active Q");
             runQueue[onCpu].activeQ.nr_active--;
             runQueue[onCpu].activeQ.prioList[highestPrio].numTask--;
 
-			printf("\nTime: %d: serving task %d on CPU %d.\n", simTime,newEvent.task.id, onCpu);
+			printf("\nTime: %d: serving task %d with bt %d on CPU %d.\n",
+                simTime,newEvent.task.id,newEvent.task.bt, newEvent.task.onCpu);
 
 			int qt; //quantum time
-			int dp; //dynamic priority
-			int bonus;
+
 			if(newEvent.task.pr<120){
 				qt=(140-newEvent.task.pr)*20;
 			}
 			else{
 				qt=(140-newEvent.task.pr)*5;
 			}
-			if(newEvent.task.bt>qt){
-				newEvent.task.nsleep++;
-				newEvent.task.avgST= (double)(simTime-newEvent.time)/newEvent.task.nsleep;
+            //printf("simtime %d, time %d, task time %d\n", simTime,newEvent.time, newEvent.task.at);
+
+			if(newEvent.task.bt<=qt){
+				newEvent.time=simTime+newEvent.task.bt;
+				newEvent.task.bt = 0;
+			}else{
+                newEvent.task.nsleep++;
+				newEvent.task.totalST+=(simTime-newEvent.task.enteredQueue);
+				newEvent.task.avgST= ((double)newEvent.task.totalST)/newEvent.task.nsleep;
+				newEvent.task.avgST-=qt;
+                newEvent.task.bt-=qt;
+                newEvent.time=simTime+qt;
 			}
 
-			// dp=max(100,min(newEvent.task.pr-bonus+5, 139));
+            wt[onCpu]+=(simTime-newEvent.task.enteredQueue);
 
-			
-
-			printf("printing avg sleep time to check....# %lf \n",newEvent.task.avgST );
-			newEvent.time=simTime+min;
-			newEvent.task.ts+=min;
+           // printf("total sleep %d, n sleep %d, task pr %d, avg sleep time: %lf\n"
+            //, newEvent.task.totalST, newEvent.task.nsleep, newEvent.task.pr, newEvent.task.avgST);
+			//printf("bt %d, , qt %d, bonus %d, dp %d \n",newEvent.task.bt, newEvent.task.avgST,qt, bonus,dp );
+			//newEvent.task.ts+=min;
 			return newEvent;
 }
 
+int max(int a , int b){
+    if(a>b)
+        return a;
+    else
+        return b;
+}
+
+int min(int a , int b){
+    if(a<b)
+        return a;
+    else
+        return b;
+}
+
 int getBonus(double avgST){
-		if(avgST>=0 && agvST<100){
-		return 0;
+        //double avgST = aST;
+
+		if(avgST>=0 && avgST<100){
+            return 0;
 		}
 		else if (avgST>=100 && avgST<200){
 			return 1;
@@ -360,7 +515,7 @@ int getBonus(double avgST){
 		else if (avgST>=500 && avgST<600){
 			return 5;
 		}
-		}else if (avgST>=600 && avgST<700){
+		else if (avgST>=600 && avgST<700){
 			return 6;
 		}else if (avgST>=700 && avgST<800){
 			return 7;
@@ -417,6 +572,7 @@ int getHighestPriority(int onCpu){
 
 }
 
+//remove!!
 void enqueuepr(QnodePtr *headPtr, QnodePtr *tailPtr,Task task){
 	QnodePtr newNodePtr = malloc( sizeof( Qnode));
 
@@ -518,7 +674,7 @@ void displayEvents(EventQnodePtr currentPtr){
 		}
 	}
 }
-
+/*
 void calcTasksStat(EventQnodePtr currentPtr){
 	if(currentPtr==NULL)
 		return;
@@ -544,61 +700,8 @@ void calcTasksStat(EventQnodePtr currentPtr){
 		avrWTRT=(double)wtRT/fTasksRT;
 		avrWTNRT=(double)wtNRT/fTasksNRT;
 	}
-}
+}*/
 
-
-
-/*printf(" task of prio %d, i is %d,\n", currentEvent.task.pr,  i);
-        for(j=0;j<numCpus;j++){
-        printf("isIdle of %d is %d \n", j, isIdle[j]) ;
-
-        printf("run Q tasks of cpu %d is %d \n", j , runQueue[j].nr_active);
-        printf("active Q tasks of cpu %d is %d \n", j , runQueue[j].activeQ.nr_active);
-        printf("expired Q tasks of cpu %d is %d \n", j , runQueue[j].expiredQ.nr_active);
-
-
-        for(k=0;k<140;k++){
-            printf("num of task in active Q tasks of prio %d is %d \n", k, runQueue[j].activeQ.prioList[k].numTask);
-        printf("num of task in expired Q tasks of prio %d is %d \n", k, runQueue[j].expiredQ.prioList[k].numTask);
-        }
-        }*/
-
-
-
-
-
-
-
-
-
-
-
-
-
-            /*
-			isIdle[i] = 0;
-
-			currentEvent.type=1;    //departure
-			highestPrio = getHighestPriority(runQueue[i]);
-
-			currentEvent.task=dequeue(&runQueue[i].activeQ.prioList[highestPrio].pArrHeadPtr,
-                                        &runQueue[i].activeQ.prioList[highestPrio].pArrTailPtr);
-
-            runQueue[i].activeQ.nr_active--;
-            runQueue[i].activeQ.prioList[highestPrio].numTask--;
-
-			printf("\nTime: %d: serving task %d.\n", simTime,currentEvent.task.id);
-			int qt; //quantum time
-			if(currentEvent.task.type==0) // RT task
-				qt=QTRT;
-			else
-				qt=QTNRT;
-			int min = currentEvent.task.bt-currentEvent.task.ts;
-			if(min>qt)
-				min=qt;
-			currentEvent.time=simTime+min;
-			currentEvent.task.ts+=min;
-			*/
 
 
 
