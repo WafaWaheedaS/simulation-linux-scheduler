@@ -274,8 +274,10 @@ void main(){
 	for(i=0;i<MAXTASKS;i++){
 
 		task.id=i;
+		task.at=rand()%IAT+prevAt;
 		// task.at=gsl_rng_uniform(r)*IAT+prevAt;
 		prevAt=task.at;
+		task.bt=rand()%MAXBURSTTIME+MINBURSTTIME;
 		// task.bt=gsl_rng_uniform(r)*MAXBURSTTIME+MINBURSTTIME;
 		printf("AT is %d and BT is %d\n", task.at, task.bt);
 		task.status=0;
@@ -297,6 +299,7 @@ void main(){
         allminIAT=min(allminIAT, task.at);
         allmaxIAT=max(allmaxIAT, task.at);
 
+        type=rand()%2; 
 		// type=gsl_rng_uniform(r)*2;                  //either 0 for RT, or 1 for NRT
 		if(type==0 && numRT!=0){
             numRT--;
@@ -341,6 +344,8 @@ void main(){
     int k=0;
     int maxQ=0;
 
+    fprintf(fp,"%-25s%-25s%-25s \n","Time","Task ID","CPU Number");
+
 	while(!isEmptyEQ(eventsQheadPtr)){
 
         k++;
@@ -355,7 +360,7 @@ void main(){
 			if(currentEvent.task.bt != 0){
                 int bonus;
                 int dp; //dynamic prio
-                fprintf(fp,"%-25s%-25s%-25s \n","Time","Task ID","CPU Number");
+                // fprintf(fp,"%-25s%-25s%-25s \n","Time","Task ID","CPU Number");
 	
 				printf("\nTime: %d: enqueu task %d in expired Q of CPU %d.\n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
 				fprintf(fp,"%-25d%-25d%-25d \n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
@@ -380,7 +385,7 @@ void main(){
                 if(currentEvent.task.type==0){
                     avgJitter+=currentEvent.task.jitter;
                 }
-                fprintf(fp,"%-25s%-25s%-25s \n","Time","Task ID","CPU Number");
+                // fprintf(fp,"%-25s%-25s%-25s \n","Time","Task ID","CPU Number");
                 printf("\nTime: %d: task %d has finished on CPU %d.\n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
             	
             	fprintf(fp,"%-25d%-25d%-25d \n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
