@@ -390,7 +390,6 @@ void main(){
             	
             	fprintf(fp,"%-25d%-25d%-25d \n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
 		
-
             }
             //switch Queues if active queue is empty
 			if(isEmptyActiveQ(runQueue[currentEvent.task.onCpu]) && !isEmptyExpireQ(runQueue[currentEvent.task.onCpu])){
@@ -474,7 +473,7 @@ void main(){
 
 
     printf("\nSimulation statistics per CPU:\n");
-
+    fprintf(fp, "\nSimulation statistics per CPU:\n");
 	for(i=0;i<numCpus;i++){
         printf("CPU %d:\n",i);
         printf("\tNumber of Tasks served = %d\n", taskPerCpu[i]);
@@ -490,6 +489,24 @@ void main(){
         printf("\tMinimum IAT = %d\n", minIAT[i]);
         printf("\tMaximum IAT = %d\n", maxIAT[i]);
         printf("\tAverage Queue Length = %f\n", (double)runQueue[i].activeQ.avgQ/simTime);
+		
+		fprintf(fp, "CPU %d:\n",i);
+        fprintf(fp, "\tNumber of Tasks served = %d\n", taskPerCpu[i]);
+        fprintf(fp, "\tAverage Delay Time = %f\n", (double)wt[i]/taskPerCpu[i]);
+        fprintf(fp, "\tAverage Response Time = %f\n", (double)rt[i]/taskPerCpu[i]);
+        fprintf(fp, "\tCPU Utilization = %f\n", (double)((simTime-starttime)-idletime[i])/ (simTime-starttime));
+        fprintf(fp, "\tThroughput per ms = %f\n", (double)MAXTASKS/simTime);
+        fprintf(fp, "\tAverage Turnaround Time = %f\n", (double)(allbtPerCPU[i]+wt[i])/taskPerCpu[i]);
+        fprintf(fp, "\tAverage Burst Time = %f\n", (double)allbtPerCPU[i]/taskPerCpu[i]);
+        fprintf(fp, "\tMinimum Burst Time = %d\n", minBT[i]);
+        fprintf(fp, "\tMaximum Burst Time = %d\n", maxBT[i]);
+        fprintf(fp, "\tAverage IAT = %f\n", (double)allatPerCPU[i]/taskPerCpu[i]);
+        fprintf(fp, "\tMinimum IAT = %d\n", minIAT[i]);
+        fprintf(fp, "\tMaximum IAT = %d\n", maxIAT[i]);
+        fprintf(fp, "\tAverage Queue Length = %f\n", (double)runQueue[i].activeQ.avgQ/simTime);
+
+
+
         avgWT+=(double)wt[i]/taskPerCpu[i];
         avgRT+=(double)rt[i]/taskPerCpu[i];
         avgCPU+=(double)((simTime-starttime)-idletime[i])/ (simTime-starttime);
@@ -515,8 +532,27 @@ void main(){
     printf("\tMaximum IAT = %d\n", allmaxIAT);
     printf("\tAverage Queue Length = %f\n", avgQL/numCpus);
     printf("\tMaximum Queue Length = %d\n", maxQ);
+
+
+    fprintf(fp, "\nOverall Simulation Statistics (all CPUs):\n");
+	fprintf(fp, "\tMaximum Tasks in the system = %d\n", MAXTASKS);
+    fprintf(fp, "\tAverage Delay Time = %f\n", avgWT/numCpus);
+    fprintf(fp, "\tAverage Response Time = %f\n", avgRT/numCpus);
+    fprintf(fp, "\tAverage CPU Utilization = %f\n", avgCPU/numCpus);
+    fprintf(fp, "\tAverage Throughput per ms = %f\n", avgTP/numCpus);
+    fprintf(fp, "\tAverage Turnaround Time = %f\n", avgTT/numCpus);
+    fprintf(fp, "\tAverage Burst Time = %f\n", avgBT/numCpus);
+    fprintf(fp, "\tMinimum Burst Time = %d\n", allminBT);
+    fprintf(fp, "\tMaximum Burst Time = %d\n", allmaxBT);
+    fprintf(fp, "\tAverage IAT = %f\n", avgIAT/numCpus);
+    fprintf(fp, "\tMinimum IAT = %d\n", allminIAT);
+    fprintf(fp, "\tMaximum IAT = %d\n", allmaxIAT);
+    fprintf(fp, "\tAverage Queue Length = %f\n", avgQL/numCpus);
+    fprintf(fp, "\tMaximum Queue Length = %d\n", maxQ);
+
     numRT=(ratioRT/100.0)*MAXTASKS;
     printf("\tJitter for Real Time Tasks = %f\n", (double)avgJitter/numRT);
+    fprintf(fp, "\tJitter for Real Time Tasks = %f\n", (double)avgJitter/numRT);
 }//end main
 
 SchedEvent serviceTask(int onCpu, SchedEvent currentEvent){
