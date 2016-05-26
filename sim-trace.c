@@ -358,7 +358,7 @@ void main(){
                 fprintf(fp,"%-25s%-25s%-25s \n","Time","Task ID","CPU Number");
 	
 				printf("\nTime: %d: enqueu task %d in expired Q of CPU %d.\n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
-				fprintf(fp,"%010d%15s%-1d%-24s%-10d%-15sP%-10d%-14s%-10d\n",simTime,"",1,"",currentEvent.task.id,"",currentEvent.task.onCpu);
+				fprintf(fp,"%-25d%-25d%-25d \n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
 		
 				if(currentEvent.task.type==1){  //change priorty of NRT tasks
                     bonus=getBonus(currentEvent.task.avgST);
@@ -380,7 +380,12 @@ void main(){
                 if(currentEvent.task.type==0){
                     avgJitter+=currentEvent.task.jitter;
                 }
+                fprintf(fp,"%-25s%-25s%-25s \n","Time","Task ID","CPU Number");
                 printf("\nTime: %d: task %d has finished on CPU %d.\n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
+            	
+            	fprintf(fp,"%-25d%-25d%-25d \n", simTime, currentEvent.task.id, currentEvent.task.onCpu);
+		
+
             }
             //switch Queues if active queue is empty
 			if(isEmptyActiveQ(runQueue[currentEvent.task.onCpu]) && !isEmptyExpireQ(runQueue[currentEvent.task.onCpu])){
